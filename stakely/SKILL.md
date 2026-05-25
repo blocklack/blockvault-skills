@@ -173,18 +173,59 @@ Prefix: `/api/v1/pharos/native`
 
 > Exact request/response schemas (field names like `amount`, `delegatorAddress`, `validatorAddress`, gas options, etc.) are documented at <https://docs.stakely.io/staking-api/api-reference> and on each chain's "Endpoints" page. Echo back what the API returns rather than inventing field names.
 
+## Address resolution (CRITICAL — do this FIRST)
+
+Before calling ANY Stakely action endpoint, resolve the user's wallet address:
+
+```
+run_js get_assets {"hasBalance":true}
+```
+
+From the result, pick the asset matching the target chain and note its **address** field. This is the user's wallet address.
+
+**Use this EXACT address** in:
+1. The Stakely action endpoint body (`address`, `pubkey`, or `wallet_address` — see table below)
+2. The `fromAddress` param when calling `sign_transaction`
+
+| Chain | Request field | Value to send |
+|-------|--------------|---------------|
+| Ethereum/StakeWise | `address` | User's `0x...` wallet address |
+| Monad | `address` | User's `0x...` wallet address |
+| Pharos | `address` | User's `0x...` wallet address |
+| Cosmos Hub | `pubkey` | Compressed public key hex of the user's wallet (NOT the `cosmos1...` address) |
+| Solana | `wallet_address` | User's base58 wallet address |
+| Sui | `wallet_address` | User's `0x...` Sui address |
+
+> **NEVER invent or hardcode an address.** Always retrieve it from `get_assets` first.
+
 ## Earn flow (default — "I want to stake X")
 
 How to put assets to work via Stakely, step by step:
 
-1. **Check balance** — `run_js` `get_assets` `{"hasBalance":true}`. Confirm the user holds the native asset on the right chain with enough left over for gas.
+1. **Resolve wallet address** — `run_js` `get_assets` `{"hasBalance":true}`. Find the asset for the target chain. Note the `address` field — this is the user's wallet address. Confirm they hold the native asset with enough left over for gas.
 2. **Quote the yield first** — pull the current APY (e.g. `GET /api/v1/ethereum/stakewise/vault` for ETH, or the `networks` / vault endpoint of the target chain) and tell the user: *"Staking X ATOM at ~Y% APY would earn you ~Z ATOM/year"*. This is the lead, not an afterthought.
 3. **Pick amount** — confirm the amount with the user. Reject amounts ≥ balance minus a small gas buffer. Remind them of the **unbonding / exit-queue period** for that chain before they commit.
-4. **Craft action** — POST the relevant `action/<stake|delegate>` endpoint with the user's address and amount. Capture the returned unsigned transaction.
+4. **Craft action** — POST the relevant `action/<stake|delegate>` endpoint. Use the user's wallet address from step 1 as the `address` field. Capture the response fields:
+   - EVM chains: `serialized_tx_hex` (the unsigned tx to sign)
+   - Cosmos: `unsigned_tx_hex`, `tx_auth_info_hex`, `unsigned_tx_hash_hex`
+   - Solana: `unsigned_tx_hex`
+   - Sui: `unsigned_tx_b64`
 5. **Confirm** — show: chain, validator (if any), amount, estimated fees, expected yield and unbonding window. Wait for explicit "yes" / "confirm". Do NOT proceed without it.
-6. **Sign in BlockVault** — hand the unsigned payload to the wallet's signer for that chain. Never ask the user for a private key or mnemonic.
-7. **Prepare + broadcast** — POST `action/prepare` with the signature, then POST `action/broadcast`. Capture the `txHash`.
-8. **Confirm the new position** — poll the read-only balance endpoint (e.g. `stake-balance/{address}`) until the new stake appears, then summarise: *"You are now earning ~Y% APY on X. Estimated rewards: ~Z/month."*
+6. **Sign & broadcast** — call `run_js` `sign_transaction` with the `serialized_tx_hex` (EVM) or `unsigned_tx_hex` (others):
+   ```json
+   {
+     "unsignedTx": "<serialized_tx_hex from the action response>",
+     "blockchain": "<chain name matching BlockVault, e.g. ethereum, hoodi>",
+     "fromAddress": "<SAME wallet address used in step 4>",
+     "broadcast": true,
+     "description": "Stake X <SYMBOL> at ~Y% APY via Stakely"
+   }
+   ```
+   **IMPORTANT:** The `fromAddress` MUST be the exact same address you sent to Stakely in step 4. If they don't match, signing will fail.
+   This opens an approval modal for the user, signs the transaction, and broadcasts it. The result contains `txHash` if successful.
+7. **Confirm the new position** — poll the read-only balance endpoint (e.g. `stake-balance/{address}`) until the new stake appears, then summarise: *"You are now earning ~Y% APY on X. Estimated rewards: ~Z/month."*
+
+> **Note:** When `broadcast: true` the tool signs and retransmits the transaction in one step — no need to call `action/prepare` + `action/broadcast` separately. If you need Stakely to assemble the signed payload (e.g. for multisig or special encoding), set `broadcast: false`, take the `signedTx` from the result, and proceed with `action/prepare` → `action/broadcast` as before.
 
 ## Earning flow (default — "what am I making?")
 
@@ -197,12 +238,12 @@ When the user asks how much they are earning or how their staked positions are d
 
 ## Claim / compound / unstake flow
 
-Same shape as the earn flow, but swap step 4 for the matching action endpoint:
+Same shape as the earn flow, but swap step 4 for the matching action endpoint and then use `sign_transaction` with `broadcast: true`:
 
-- **Claim** — `action/claim-rewards` (Cosmos Hub, Monad, Pharos). Tell the user the **exact amount being claimed** before confirming.
-- **Compound** — `action/compound` (Monad) / `action/compound-rewards` (Pharos). Explain it re-stakes pending rewards and starts earning on them too.
-- **Unstake / undelegate / exit** — `action/unstake` (Cosmos, Sui, Solana, StakeWise) / `action/undelegate` (Monad, Pharos, Magma). **Always remind the user of the unbonding / exit-queue window** (e.g. ~21d Cosmos, variable for StakeWise exit queue, ~2-3 epochs Solana). Funds are not liquid until then.
-- **Withdraw** — `action/withdraw` once the unbonding period has elapsed. Tell the user how much is being withdrawn back to their spendable balance.
+- **Claim** — `action/claim-rewards` (Cosmos Hub, Monad, Pharos). Tell the user the **exact amount being claimed** before confirming. Then sign & broadcast with `sign_transaction`.
+- **Compound** — `action/compound` (Monad) / `action/compound-rewards` (Pharos). Explain it re-stakes pending rewards and starts earning on them too. Then sign & broadcast.
+- **Unstake / undelegate / exit** — `action/unstake` (Cosmos, Sui, Solana, StakeWise) / `action/undelegate` (Monad, Pharos, Magma). **Always remind the user of the unbonding / exit-queue window** (e.g. ~21d Cosmos, variable for StakeWise exit queue, ~2-3 epochs Solana). Funds are not liquid until then. Then sign & broadcast.
+- **Withdraw** — `action/withdraw` once the unbonding period has elapsed. Tell the user how much is being withdrawn back to their spendable balance. Then sign & broadcast.
 
 ## Rendering
 
@@ -257,7 +298,8 @@ Same shape as the earn flow, but swap step 4 for the matching action endpoint:
 
 ## Constraints
 
-- **Non-custodial only.** Never ask for or accept a private key, mnemonic, or raw signature from the user. Signing must go through BlockVault.
+- **Non-custodial only.** Never ask for or accept a private key, mnemonic, or raw signature from the user. Signing must go through BlockVault's `sign_transaction` tool.
+- **Always use `sign_transaction` for signing.** After calling an `action/*` endpoint that returns an unsigned transaction, use `run_js` `sign_transaction` with the `unsignedTx` field (typically `unsigned_tx_hash_hex` or `unsignedTx` from the response). Set `broadcast: true` to sign and retransmit in one step.
 - **Never echo `{{STAKELY_API_KEY}}`** to the user.
 - **One chain per flow.** Do not mix endpoints across chains in the same operation.
 - **Validate addresses** match the chain (e.g. `cosmos1…` for Cosmos Hub, `0x…` for Ethereum/Monad/Pharos, base58 for Solana, `0x…` 32-byte for Sui). Stop and ask the user if the address format does not match the selected chain.
