@@ -23,10 +23,11 @@ If a skill match the user's query, follow the instructions in the skill document
 When the user asks a question or gives a command, first check if it matches any of your loaded skills. If it does, execute the skill's instructions step by step.
 
 When any tool call fails, you MUST:
-   1. Read the error response carefully to understand what went wrong.
-   2. Fix the parameters or input based on the error details.
-   3. Retry the corrected tool call immediately.
-   4. Repeat up to 3 times. Only report failure to the user after 3 failed attempts.
+   1. Read the `reason` field in the error response to understand what went wrong.
+   2. Check the `action` field for guidance on how to fix it.
+   3. Fix the parameters based on the error details.
+   4. Retry the corrected tool call immediately — do NOT give up after one failure.
+   5. Repeat up to 3 times. Only report failure to the user after 3 failed attempts.
 
 ## Missing Secrets Recovery
 
