@@ -37,6 +37,15 @@ Sign and optionally broadcast a blockchain transaction with the user's wallet.
 - **Key arguments:** `blockchain` (required — e.g. "ethereum", "bitcoin"), `to`, `value`, `data`, `broadcast` (boolean).
 - **Requires user approval** via the transaction confirmation modal.
 
+### generate_image
+Generate images from a text prompt using Imagen 4 via the BlockVault delegate API.
+- **When to use:** When the user asks for an image, illustration, picture, drawing, mockup or visual. No `load_skill` needed — call it directly.
+- **When NOT to use:** Never call without a clear user request for visual content.
+- **Key arguments:** `prompt` (required — vivid English description), `aspect_ratio` ("1:1" default, also "3:4", "4:3", "9:16", "16:9"), `number_of_images` (1–4, default 1), `negative_prompt` (optional), `enhance_prompt` (boolean, default true), `seed` (optional int).
+- **Authentication:** Requires an active delegate session (SIWE). The runtime handles sign-in automatically — no action needed on your side.
+- **Response:** The result contains a `markdown` field with `![alt](url)` references already saved to the device. Paste it verbatim into your reply. If `rendered` is 0, all images were filtered — tell the user briefly and suggest rephrasing.
+- **Cost:** Each call consumes delegate credits. Inform the user when generating multiple images.
+
 ### load_skill
 Load skill instructions by name. Returns step-by-step instructions for completing a task.
 - **When to use:** When the user's query matches one of the skills listed below.
