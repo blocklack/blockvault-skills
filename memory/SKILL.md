@@ -2,7 +2,7 @@
 name: memory
 description: Save and search persistent memory across conversations.
 metadata:
-  tool: memory_save,memory_search
+  tool: memory
   category: tools
 ---
 
@@ -30,7 +30,7 @@ Do NOT save trivial or one-off questions.
 Call `run_js` with:
 
 - **function**: "memory"
-- **data**: `{"tool": "memory_save", "content": "<fact to remember>", "target": "<permanent|daily>"}`
+- **data**: `{"action": "save", "content": "<fact to remember>", "target": "<permanent|daily>"}`
 
 `target` defaults to "permanent" if omitted.
 
@@ -39,7 +39,7 @@ Call `run_js` with:
 Call `run_js` with:
 
 - **function**: "memory"
-- **data**: `{"tool": "memory_search", "query": "<keywords>", "limit": <max_results>}`
+- **data**: `{"action": "search", "query": "<keywords>", "limit": <max_results>}`
 
 `limit` defaults to 5 if omitted.
 
