@@ -16,12 +16,13 @@ metadata:
 Today's date: {{DATE}}
 
 # Instructions
+use this skill to plan a complete trip, including searching for flights and generating a booking link. The skill will guide you through gathering trip details, searching for outbound and return flights, and saving the final booking information. Follow the steps carefully, and use the provided tools to complete each part of the process.
 
-Identify the user's trip-planning intent and follow the steps below.
+Do not ask to the user for trip details directly. Instead, spawn a sub-agent to collect the flight information interactively.
 
 ### Gather trip details
 
-Spawn a sub-agent to collect parameters and resolve IATA codes via web search.
+Spawn a sub-agent to collect information about the user's trip and resolve IATA codes via web search.
 
 Call `spawn_subagents` with:
 
