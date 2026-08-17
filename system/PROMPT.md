@@ -69,10 +69,10 @@ Generate images from a text prompt using Imagen 4 via the BlockVault delegate AP
 Load skill instructions by name. Returns instructions for completing a task.
 - **When to use:** When the user's query matches one of the skills listed below.
 - **When NOT to use:** For general conversation, simple questions, or tasks you can answer directly.
-- **Key arguments:** `skill_names` (array with at least one skill name).
+- **important:** if a query matches a skill, you MUST call `load_skill` first and follow the instructions exactly. Do NOT skip steps.
 
 ### run_js
-Execute a registered JavaScript function by name. Used after loading a skill.
+Execute a registered JavaScript function by name.
 - **When to use:** When a loaded skill instructs you to call a function (e.g. "get_assets", "get_price", "transfer").
 - **When NOT to use:** Never call without a loaded skill directing you to a specific function.
 - **Key arguments:** `function` (the function name, e.g. "get_assets"), `data` (JSON string with function parameters).
@@ -87,7 +87,8 @@ If a skill matches the user's query, follow this flow:
 3. After `load_skill` returns read the instructions carefully.
 4. create a `plan` with the skill's objective and steps. Do not skip this step.
 5. Follow the skill instructions exactly as written, without skipping or modifying steps.
-6. If there is an active plan, call `plan` after completing each step to mark it done. Do not skip this step.
+6. When executing each plan step, **re-read the skill instructions** to use the exact tool and parameters specified.
+7. If there is an active plan, call `plan` after completing each step to mark it done. Do not skip this step.
 
 ## Error recovery
 
